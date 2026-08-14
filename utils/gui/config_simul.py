@@ -1,8 +1,8 @@
 from flet_core import MainAxisAlignment, ControlEvent, CrossAxisAlignment, TextStyle
 import flet as ft
 
-from gui.common import show_snack_bar, Page
-from utils.config import config
+from utils.gui.common import show_snack_bar, Page
+from utils.simul.config import config
 import os
 
 
@@ -19,6 +19,9 @@ def config_view(page: Page):
 
     def show_map_checkbox_changed(_e):
         config.show_map_mode = (config.show_map_mode + 1) % 2
+
+    def bonus_checkbox_changed(_e):
+        config.bonus = not config.bonus
 
     def debug_checkbox_changed(_e):
         config.debug_mode = not config.debug_mode
@@ -131,12 +134,14 @@ def config_view(page: Page):
                             [
                                 ft.Column(
                                     [
-                                        # ft.Checkbox(
-                                        #     label="显示地图",
-                                        #     value=get_info_mode(config.show_map_mode),
-                                        #     on_change=show_map_checkbox_changed,
-                                        # ),
                                         ft.Container(height=8),
+                                        ft.Switch(
+                                            label="沉浸奖励",
+                                            value=get_info_mode(config.bonus),
+                                            on_change=bonus_checkbox_changed,
+                                            label_position='left',
+                                            scale=1.2
+                                        ),
                                         ft.Switch(
                                             label="调试模式",
                                             value=get_info_mode(config.debug_mode),
@@ -179,7 +184,7 @@ def config_view(page: Page):
                                                 ft.dropdown.Option("4"),
                                                 ft.dropdown.Option("5"),
                                             ],
-                                            text_style=TextStyle(color=ft.colors.PINK,weight=ft.FontWeight.W_600),
+                                            text_style=TextStyle(color=ft.colors.PINK_600,weight=ft.FontWeight.W_600),
                                             value=config.difficult,
                                             on_change=difficult_changed,
                                         ),
@@ -198,7 +203,7 @@ def config_view(page: Page):
                                                 ft.dropdown.Option("繁育"),
                                                 ft.dropdown.Option("智识"),
                                             ],
-                                            text_style=TextStyle(color=ft.colors.PINK,weight=ft.FontWeight.W_600),
+                                            text_style=TextStyle(color=ft.colors.PINK_600,weight=ft.FontWeight.W_600),
                                             value=config.fate,
                                             on_change=fate_changed,
                                         ),
@@ -212,7 +217,7 @@ def config_view(page: Page):
                                                 ft.dropdown.Option("America"),
                                                 ft.dropdown.Option("Europe"),
                                             ],
-                                            text_style=TextStyle(color=ft.colors.PINK,weight=ft.FontWeight.W_600),
+                                            text_style=TextStyle(color=ft.colors.PINK_600,weight=ft.FontWeight.W_600),
                                             value=config.timezone,
                                             on_change=timezone_changed,
                                         ),
@@ -222,12 +227,12 @@ def config_view(page: Page):
                                 ft.Row(
                                     [
                                         txt,
-                                        # ft.IconButton(
-                                        #     icon=ft.icons.DELETE,
-                                        #     tooltip="清空通关计数",
-                                        #     icon_size=35,
-                                        #     on_click=go_del,
-                                        # ),
+                                        ft.IconButton(
+                                            icon=ft.icons.DELETE,
+                                            tooltip="清空通关计数",
+                                            icon_size=35,
+                                            on_click=go_del,
+                                        ),
                                     ]
                                 ),
                                 ft.Row(
@@ -237,10 +242,10 @@ def config_view(page: Page):
                                             text=str(config.max_run),
                                             on_click=lambda _: go_input_x(page),
                                         ),
-                                        ft.Text("次（-1为无限循环）",weight=ft.FontWeight.W_400,size=18),
+                                        ft.Text("次",weight=ft.FontWeight.W_400,size=18),
                                     ]
                                 ),
-                                ft.Container(height=100),
+                                ft.Container(height=60),
                                 ft.ElevatedButton(
                                     content=ft.Row(
                                         [
@@ -268,29 +273,30 @@ def config_view(page: Page):
     )
 
 def go_input_x(page):
-    def close_dialog(e):
-        try:
-            new_x = int(textfield_ref.value)
-            if 0 <= new_x <= 999 or new_x == -1:
-                config.max_run = new_x
-                x_button.text = str(config.max_run)
-                page.update()
-        except:
-            pass
+    def close_dialog(e, cancel=False):
+        if not cancel:
+            try:
+                new_x = int(textfield_ref.value)
+                if 0 <= new_x <= 999 or new_x == -1:
+                    config.max_run = new_x
+                    x_button.text = str(config.max_run)
+                    page.update()
+            except:
+                pass
         dialog.open = False
         page.update()
     x_button = page.views[-1].controls[-1].controls[-1].controls[-3].controls[1]
     textfield_ref = ft.TextField(
-        label="上限次数（-1为无限循环）",
+        label="运行次数（-1为无限循环）",
         keyboard_type=ft.KeyboardType.NUMBER,
         on_submit=close_dialog,
     )
     
     dialog = ft.AlertDialog(
-        title=ft.Text("输入上限次数"),
+        title=ft.Text("输入运行次数"),
         content=textfield_ref,
         actions=[
-            ft.TextButton("取消", on_click=lambda _: close_dialog(ft.ControlEvent(None))),
+            ft.TextButton("取消", on_click=lambda e: close_dialog(e, cancel=True)),
             ft.TextButton("确认", on_click=close_dialog),
         ],
         actions_alignment=ft.MainAxisAlignment.END,

@@ -1,9 +1,12 @@
 __pycache__/
+.venv/
 venv/
 .idea/
 .vscode/
 build/
 dist/
+img/
+test.*
 *.spec
 imgs/bigmap.jpg
 imgs/bwmap.jpg
@@ -28,6 +31,7 @@ check5.txt
 *.zip
 ocr/
 info.yml
+info_old.yml
 version.txt
 *.exe
 test.py

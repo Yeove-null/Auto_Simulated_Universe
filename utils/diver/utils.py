@@ -18,13 +18,18 @@ from PIL import Image, ImageDraw, ImageFont
 from math import sin, cos
 import traceback
 
-from utils.map_log import map_log
-from utils.config import config
+from utils.diver.config import config
+from utils.diver.args import args
 from utils.log import log
-import utils.ocr as ocr
-import utils.keyops as keyops
+import utils.diver.ocr as ocr
+import utils.diver.keyops as keyops
 from utils.screenshot import Screen
 import threading
+from utils.log import my_print as print
+from utils.log import print_exc
+
+from pathlib import Path
+from datetime import datetime
 
 
 def notif(title, msg, cnt=None):
@@ -70,6 +75,8 @@ def set_forground():
         else:
             shell.SendKeys("")
         game_nd = win32gui.FindWindow("UnityWndClass", "崩坏：星穹铁道")
+        if game_nd == 0:
+            game_nd = win32gui.FindWindow(None, "云·星穹铁道")
         win32gui.SetForegroundWindow(game_nd)
     except:
         pass
@@ -77,7 +84,6 @@ def set_forground():
 
 class UniverseUtils:
     def __init__(self):
-        self.my_nd = win32gui.GetForegroundWindow()
         set_forground()
         self.check_bonus = 1
         self._stop = False
@@ -85,11 +91,10 @@ class UniverseUtils:
         self.move = 0
         self.multi = config.multi
         self.diffi = config.diffi
-        self.fate = config.fate
         self.my_fate = -1
         self.fail_count = 0
         self.first_mini = 1
-        self.ts = ocr.My_TS()
+        self.ts = ocr.My_TS(father=self)
         self.last_info = ''
         self.mini_target = 0
         self.f_time = 0
@@ -98,15 +103,10 @@ class UniverseUtils:
         self.allow_e = 1
         self.quan = 0
         self.img_map = dict()
-        # 用户选择的命途
-        for i in range(len(config.fates)):
-            if config.fates[i] == self.fate:
-                self.my_fate = i
-        if self.my_fate == -1:
-            log.info("info有误，自动选择巡猎命途    错误：" + self.fate)
-            self.my_fate = 4
         self.tk = ocr.text_keys(self.my_fate)
         self.debug, self.find = 0, 1
+        self.lst_mask = None
+        self.event_mask = None
         self.bx, self.by = 1920, 1080
         log.warning("等待游戏窗口")
         self.tss = "ey.jpg"
@@ -153,18 +153,15 @@ class UniverseUtils:
                 # x01y01:窗口左上右下坐标
                 # xx yy:窗口大小
                 # scx scy:当前窗口和基准窗口（1920*1080）缩放大小比例
-                if Text == "崩坏：星穹铁道":
-                    time.sleep(1)
+                if Text == "崩坏：星穹铁道" or Text == "云·星穹铁道":
                     if self.xx != 1920 or self.yy != 1080:
-                        log.error("分辨率错误")
+                        log.error(f"分辨率错误 {self.xx} {self.yy} 请设为1920*1080")
                     break
                 else:
                     time.sleep(0.3)
             except Exception:
-                traceback.print_exc()
-                time.sleep(0.3)
+                print_exc()
                 pass
-        self.order = config.order
         self.sct = Screen()
 
     def gen_hotkey_img(self,hotkey="e",bg="imgs/f_bg.jpg"):
@@ -258,10 +255,19 @@ class UniverseUtils:
     def calc_point(self, point, offset):
         return (point[0] - offset[0] / self.xx, point[1] - offset[1] / self.yy)
 
-    def click_text(self, text, env=None, click=1):
+    def click_box(self, box):
+        x = (box[0] + box[1]) / 2
+        y = (box[2] + box[3]) / 2
+        self.click((1 - x / self.xx, 1 - y / self.yy))
+
+    def click_position(self, position):
+        self.click_box([position[0], position[0], position[1], position[1]])
+
+    def click_text(self, text, click=1):
         img = self.get_screen()
-        pt = self.ts.find_text(img, text, env=env)
-        if pt is not None:
+        pt = self.ts.find_with_text([text])
+        if pt:
+            pt = pt[0]['box']
             if click:
                 self.click(
                     (
@@ -302,7 +308,7 @@ class UniverseUtils:
         self.print_stack()
         x, y = points
         # 如果是浮点数表示，则计算实际坐标
-        if type(x) != type(0):
+        if type(x) != int:
             x, y = self.x1 - int(x * self.xx), self.y1 - int(y * self.yy)
         # 全屏模式会有一个偏移
         if self.full:
@@ -330,6 +336,8 @@ class UniverseUtils:
             y2 += 9
         win32api.SetCursorPos((x1, y1))
         time.sleep(0.2)
+        # pyautogui.mouseDown(button="primary", logScreenshot=False, _pause=False)
+        # time.sleep(0.3)
         pyautogui.drag(x2 - x1, y2 - y1, 0.4)
         time.sleep(0.3)
 
@@ -342,11 +350,11 @@ class UniverseUtils:
                 print(result["max_val"])
                 points = self.calculated(result, target.shape)
                 self.get_point(*points)
-                exit()
-                # log.info("target shape: %s" % target.shape)
+                # exit()
+                log.info(f"target shape: {target.shape}")
                 # self.click(points)
                 return
-            if flag == False:
+            if not flag:
                 return
 
     # 在截图中裁剪需要匹配的部分
@@ -360,7 +368,7 @@ class UniverseUtils:
         ]
 
     def format_path(self, path):
-        return f"./imgs/{path}.jpg"
+        return f"imgs/{path}.jpg"
 
     # 判断截图中匹配中心点附近是否存在匹配模板
     # path：匹配模板的路径，x,y：匹配中心点，mask：如果存在，则以mask大小为基准裁剪截图，threshold：匹配阈值
@@ -369,7 +377,7 @@ class UniverseUtils:
             threshold = self.threshold
         path = self.format_path(path)
         target = cv.imread(path)
-        if path == './imgs/f.jpg' and config.mapping[0]!='f':
+        if path == 'imgs/f.jpg' and config.mapping[0]!='f':
             target = self.gen_hotkey_img(config.mapping[0])
             threshold -= 0.01
         target = cv.resize(
@@ -399,6 +407,35 @@ class UniverseUtils:
             #print(x,y,max_loc,local_screen.shape)
             #self.click((self.tx,self.ty),click=0)
             #exit()
+        self.tm = max_val
+        if max_val > threshold:
+            if self.last_info != path:
+                log.info("匹配到图片 %s 相似度 %f 阈值 %f" % (path, max_val, threshold))
+            self.last_info = path
+        return max_val > threshold
+    
+    def click_img(self, path, threshold=0.95):
+        path = self.format_path(path)
+        target = cv.imread(path)
+        result = cv.matchTemplate(self.screen, target, cv.TM_CCORR_NORMED)
+        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(result)
+        if max_val > threshold:
+            x, y = max_loc
+            self.click_position((x + target.shape[1]//2, y + target.shape[0]//2))
+            log.info(f"点击new: {x}, sub: {y}")
+            return 1
+        return 0
+
+    def click_new(self):
+        return self.click_img('new')
+    
+    def check_box(self, path, box=[0,1920,0,1080], threshold=0.96):
+        path = self.format_path(path)
+        target = cv.imread(path)
+        local_screen = self.screen[box[2]:box[3],box[0]:box[1]]
+        result = cv.matchTemplate(local_screen, target, cv.TM_CCORR_NORMED)
+        min_val, max_val, min_loc, max_loc = cv.minMaxLoc(result)
+        self.tx, self.ty = (max_loc[0]+box[0], max_loc[1]+box[2])
         self.tm = max_val
         if max_val > threshold:
             if self.last_info != path:
@@ -507,8 +544,37 @@ class UniverseUtils:
 
     # 从全屏截屏中裁剪得到游戏窗口截屏
     def get_screen(self):
+        hwnd = win32gui.GetForegroundWindow()  # 根据当前活动窗口获取句柄
+        Text = win32gui.GetWindowText(hwnd)
+        while Text != "崩坏：星穹铁道" and Text != "云·星穹铁道" and not self._stop:
+            log.warning("等待游戏窗口")
+            time.sleep(0.5)
+            hwnd = win32gui.GetForegroundWindow()  # 根据当前活动窗口获取句柄
+            Text = win32gui.GetWindowText(hwnd)
         self.screen = self.sct.grab(self.x0, self.y0)
         return self.screen
+    
+    def save_screen(self, save_path=r"D:\debug", name=""):
+        """
+        获取截图并保存到指定路径
+        :param save_path: 保存截图的路径
+        """
+        # 获取截图
+        sc = self.screen
+
+        # 如果截图是 numpy.ndarray 类型，将其转换为 PIL.Image
+        if isinstance(sc, np.ndarray):
+            sc = Image.fromarray(sc)
+
+        # 确保路径存在
+        save_path = Path(save_path)
+        save_path.mkdir(parents=True, exist_ok=True)
+
+        # 构造文件名，使用当前时间戳
+        filename = name + datetime.now().strftime("%Y%m%d_%H%M%S") + ".png"
+
+        # 保存截图
+        sc.save(save_path / filename)
 
     # 移动视角，获得小地图中不变的部分（白线、灰块）
     def take_fine_minimap(self, n=5, dt=0.01, dy=200):
@@ -641,19 +707,19 @@ class UniverseUtils:
         self.press("m", 0.2)
         time.sleep(1)
 
-    def goodf(self):
-        if not self.check("f", 0.4443, 0.4417, mask="mask_f1", threshold=0.96):
-            return False
-        img = self.check("z", 0.3344, 0.4241, mask="mask_f", large=False)
-        text = self.ts.sim_list(self.tk.interacts, img)
-        if text is None:
-            # 使用新坐标重新尝试
-            img = self.check("z", 0.3365, 0.4231, mask="mask_f", large=False)
-            text = self.ts.sim_list(self.tk.interacts, img)
-        is_killed = text in ["沉浸", "紧锁", "复活", "下载"]
-        if text is not None:
-            log.info('识别到交互信息：'+text)
-        return text is not None and not is_killed
+    def check_f(self, is_in=[], check_text=1):
+        if self.check("f", 0.4443, 0.4417, mask="mask_f1", threshold=0.95):
+            if not check_text:
+                return 1
+            text = self.ts.ocr_one_row(self.screen, [1206, 1437, 587, 635])
+            if len(text):
+                log.info('识别到交互信息：' + text)
+                if len(is_in) == 0:
+                    return text
+                for i in is_in:
+                    if i in text:
+                        return text
+        return None
 
     def get_tar(self):
         # 寻找最近的目标点
@@ -1236,8 +1302,8 @@ class UniverseUtils:
                     return 0
         return 1
 
-    def print_stack(self, num=1):
-        if self.debug:
+    def print_stack(self, num=1, force=0):
+        if self.debug or force:
             stk = traceback.extract_stack()
             for i in range(num):
                 try:
@@ -1473,24 +1539,19 @@ class UniverseUtils:
 
     def solve_snack(self):
         self.get_screen()
-        f = 0
         if self.check('snack', 0.3844,0.5065, mask='mask_snack'):
             self.click((self.tx,self.ty))
             time.sleep(0.3)
-            self.click((0.3807,0.2472))
+            self.click_position([1184, 815])
             time.sleep(0.4)
-            f = 1
         else:
             self.allow_e = 0
-        self.press('esc')
-        if not self.quan:
-            time.sleep(1)
+            time.sleep(1.0)
+        self.click_position([768, 815])
+        time.sleep(0.6)
+        if self.allow_e:
             self.press('e')
-        else:
-            for _ in range(2):
-                self.press('e')
-                time.sleep(0.2)
-    
+
     def use_e(self):
         self.press('e')
         time.sleep(0.4)
@@ -1568,3 +1629,49 @@ class UniverseUtils:
             self.get_screen()
             if not self.check("choose_bless", 0.9266, 0.9491, threshold=0.945):
                 return
+
+    def get_text_position(self, clean=0):
+        if self.event_mask is None:
+            self.event_mask = (cv.imread('imgs/divergent/event_mask.jpg', cv.IMREAD_GRAYSCALE) > 70)[:497]
+            self.event_mask_clean = (cv.imread('imgs/divergent/event_mask_clean.jpg', cv.IMREAD_GRAYSCALE) > 70)[:497]
+        scr = self.screen[:497]
+        mask = np.zeros((497, scr.shape[1]), dtype=np.uint8)
+        mask_zero = np.zeros((497, scr.shape[1]), dtype=np.uint8)
+        mask[((scr.max(axis=-1)-scr.min(axis=-1)) < 3)&(scr.max(axis=-1)>247)] = 255
+        mask_zero[((scr.max(axis=-1)-scr.min(axis=-1)) < 3)&(scr.max(axis=-1)<21)] = 255
+        kernel = np.ones((10, 30), np.uint8)
+        mask_zero = cv.dilate(mask_zero, kernel, iterations=1)
+        mask &= mask_zero
+        if clean:
+            mask[self.event_mask_clean] = 0
+        else:
+            mask[self.event_mask] = 0
+        if clean == 0 and self.lst_mask is not None:
+            mask[self.lst_mask] = 0
+        self.lst_mask = mask
+        kernel = np.ones((8, 55), np.uint8)
+        mask = cv.dilate(mask, kernel, iterations=1)
+        kernel = np.ones((6, 40), np.uint8)
+        mask = cv.erode(mask, kernel, iterations=2)
+        contours, _ = cv.findContours(mask, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE)
+        mx_area, mx_cnt = 0, None
+        for cnt in contours:
+            x, y, w, h = cv.boundingRect(cnt)
+            # print(w,h)
+            if h > 22:
+                continue
+            if mx_area < w * h:
+                mx_area = w * h
+                mx_cnt = cnt
+        res = []
+        if mx_area < 4:
+            return res
+        xx, yy, ww, hh = cv.boundingRect(mx_cnt)
+        for cnt in contours:
+            x, y, w, h = cv.boundingRect(cnt)
+            if w * h >= 4 and abs(y - yy) < 20:
+                res.append((x+w//2,y+h//2))
+        res = sorted(res, key=lambda x: x[0])
+        if len(res) == 2 and res[1][0]-res[0][0] < 150:
+            res = [((res[0][0]+res[1][0])//2,res[0][1])]
+        return res

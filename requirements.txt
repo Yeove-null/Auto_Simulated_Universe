@@ -1,14 +1,16 @@
-numpy
 opencv_python
 PyAutoGUI
 pywin32
-flet
+flet==0.23.2
+flet_core==0.23.2
 pyinstaller
 pyuac
 pillow
 keyboard
 requests
-ppocr-onnx
+onnxruntime-directml
+shapely
+pyclipper
 pyscreeze==0.1.28
 tzdata
 tzlocal
@@ -18,3 +20,4 @@ winotify
 pystray
 psutil
 mss
+numpy==1.26.4

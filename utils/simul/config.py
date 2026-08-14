@@ -6,14 +6,14 @@ import sys
 
 class Config:
     def __init__(self):
-        self.abspath = os.path.dirname(os.path.dirname(__file__))  # 获取项目根目录../Auto_Simulated_Universe
+        self.abspath = os.path.dirname(os.path.dirname(os.path.dirname(__file__)))  # 获取项目根目录../Auto_Simulated_Universe
         if getattr(sys, 'frozen', False):
             self.abspath = '.'
         self.order_text = "1 2 3 4"
         self.angle = "1.0"
-        self.difficult = "4"
+        self.difficult = "5"
         self.allow_difficult = [1, 2, 3, 4, 5]
-        self.text = "info.yml"
+        self.text = "info_old.yml"
         self.fate = "巡猎"
         self.map_sha = ""
         self.fates = ["存护", "记忆", "虚无", "丰饶", "巡猎", "毁灭", "欢愉", "繁育", "智识"]
@@ -65,6 +65,7 @@ class Config:
                     self.show_map_mode = config['show_map_mode']
                     self.debug_mode = config['debug_mode']
                     self.speed_mode = config['speed_mode']
+                    self.bonus = config['bonus']
                     self.long_press_sprint = config['long_press_sprint']
                     self.use_consumable = config['use_consumable']
                     self.force_update = config['force_update']
@@ -87,7 +88,7 @@ class Config:
                 secondary_fate = yaml.safe_load(f)['config']['secondary_fate']
         except:
             try:
-                with open(os.path.join(self.abspath, 'info_example.yml'), "r", encoding="utf-8", errors='ignore') as f:
+                with open(os.path.join(self.abspath, 'info_example_old.yml'), "r", encoding="utf-8", errors='ignore') as f:
                     secondary_fate = yaml.safe_load(f)['config']['secondary_fate']
             except:
                 secondary_fate = ['巡猎','毁灭','丰饶']
@@ -97,7 +98,7 @@ class Config:
                 prior = yaml.safe_load(f)['prior']
         except:
             try:
-                with open(os.path.join(self.abspath, 'info_example.yml'), "r", encoding="utf-8", errors='ignore') as f:
+                with open(os.path.join(self.abspath, 'info_example_old.yml'), "r", encoding="utf-8", errors='ignore') as f:
                     prior = yaml.safe_load(f)['prior']
             except:
                 prior = {
@@ -154,6 +155,7 @@ class Config:
                     "show_map_mode": self.show_map_mode,
                     "debug_mode": self.debug_mode,
                     "speed_mode": self.speed_mode,
+                    "bonus": self.bonus,
                     "long_press_sprint": self.long_press_sprint,
                     "use_consumable": self.use_consumable,
                     "slow_mode": self.slow_mode,

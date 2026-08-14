@@ -5,11 +5,16 @@ import win32gui
 from flet_core import MainAxisAlignment, CrossAxisAlignment
 
 from align_angle import main as align_angle
-from gui.common import show_snack_bar, mynd, Page
-from states import SimulatedUniverse, version
-from utils.config import config
-from utils.update_map import update_map
-from utils.utils import notif
+from utils.gui.common import show_snack_bar, Page, list_handles
+from simul import SimulatedUniverse
+from diver import DivergentUniverse, version
+from utils.diver.config import config as config_diver
+from utils.simul.config import config as config_simul
+from utils.simul.update_map import update_map
+from utils.simul.utils import notif
+from utils.diver.args import args
+from utils.log import my_print as print
+from utils.log import print_exc
 import time
 
 
@@ -31,16 +36,14 @@ def choose_view(page: Page):
             res = func(*args, **kwargs)
             change_all_button(False)
             return res
-        except ValueError as e:
-            pass
         except Exception:
             print("E: 运行函数时出现错误")
-            traceback.print_exc()
+            print_exc()
         finally:
             change_all_button(False)
 
     def angle(_e):
-        if config.angle == "1.0" or page.first == 1:
+        if config_diver.angle == "1.0" or page.first == 1:
             go_about()
             time.sleep(8)
             page.first = 0
@@ -52,8 +55,13 @@ def choose_view(page: Page):
             show_snack_bar(page, "校准成功（＾∀＾●）", ft.colors.GREEN)
         else:
             show_snack_bar(page, "校准失败（⊙.⊙）", ft.colors.RED)
+        try:
+            guind = list_handles('AutoSimulatedUniverse')
+            win32gui.SetForegroundWindow(guind)
+        except:
+            pass
 
-    def start(_e):
+    def start(_e, name):
         if page.first == 1:
             go_about()
             time.sleep(8)
@@ -61,32 +69,33 @@ def choose_view(page: Page):
             page.dialog.open = False
             page.update()
         show_snack_bar(page, "开始运行，请切换回游戏（＾∀＾●）", ft.colors.GREEN)
-        tm = time.time()
-        page.su = run(
-            SimulatedUniverse,
-            1,
-            int(config.debug_mode),
-            int(config.show_map_mode),
-            int(config.speed_mode),
-            int(config.use_consumable),
-            int(config.slow_mode),
-            int(config.max_run),
-            unlock = True,
-            bonus=config.bonus,
-            gui=1,
-        )
+        if name == 'simul':
+            page.su = run(
+                SimulatedUniverse,
+                1,
+                int(config_simul.debug_mode),
+                int(config_simul.show_map_mode),
+                int(config_simul.speed_mode),
+                int(config_simul.use_consumable),
+                int(config_simul.slow_mode),
+                int(config_simul.max_run),
+                unlock = True,
+                bonus=config_simul.bonus,
+                gui=1,
+            )
+        else:
+            args.cpu = int(config_diver.cpu_mode)
+            page.su = run(
+                DivergentUniverse,
+                int(config_diver.debug_mode),
+                int(config_diver.max_run),
+                int(config_diver.speed_mode)
+            )
         run(page.su.start)
         txt = " "
-        if time.time() - tm < 20:
-            go_dep()
-            # txt = "请确认python+numpy已安装并正确配置环境变量"
         try:
-            if page.su.validate == 0:
-                txt = "版本过低，请更新"
-        except:
-            pass
-        try:
-            win32gui.SetForegroundWindow(page.su.my_nd)
+            guind = list_handles('AutoSimulatedUniverse')
+            win32gui.SetForegroundWindow(guind)
         except:
             pass
         if page.su is not None:
@@ -105,17 +114,6 @@ def choose_view(page: Page):
         if page.su is not None:
             run(page.su.stop)
 
-    def hide(_e):
-        try:
-            if win32gui.IsWindowVisible(mynd):
-                show_snack_bar(page, "隐藏命令行窗口", ft.colors.GREEN)
-                win32gui.ShowWindow(mynd, 0)  # 隐藏命令行窗口
-            else:
-                show_snack_bar(page, "显示命令行窗口", ft.colors.GREEN)
-                win32gui.ShowWindow(mynd, 1)  # 显示命令行窗口
-        except:
-            pass
-
     def update_maps(_e):
         show_snack_bar(page, "更新地图功能已经弃用（´・н・‘）", ft.colors.RED)
         return
@@ -123,8 +121,8 @@ def choose_view(page: Page):
         msg, col = update_map(config.force_update)
         show_snack_bar(page, msg, col)
 
-    def go_config(_e):
-        page.go("/config")
+    def go_config(_e, name):
+        page.go("/config_"+name)
 
     def go_about(e=None):
         dlg = ft.AlertDialog(
@@ -136,6 +134,20 @@ def choose_view(page: Page):
         page.dialog = dlg
         dlg.open = True
         page.update()
+
+    def go_test(e=None):
+        args.cpu = int(config_diver.cpu_mode)
+        page.su = run(
+            DivergentUniverse,
+            int(config_diver.debug_mode),
+            int(config_diver.max_run),
+            int(config_diver.speed_mode)
+        )
+        run(page.su.screen_test)
+        txt = " "
+        if page.su is not None:
+            run(page.su.stop)
+        notif("已完成截图测试", txt)
 
     def go_money(e=None):
         dlg = ft.AlertDialog(
@@ -167,7 +179,7 @@ def choose_view(page: Page):
         show_snack_bar(page, "已临时解锁限制o(*￣▽￣*)ブ", ft.colors.GREEN)
 
     def bonus_changed(e):
-        config.bonus = not config.bonus
+        config_simul.bonus = not config_simul.bonus
 
     # View
     page.views.append(
@@ -194,6 +206,7 @@ def choose_view(page: Page):
                                 size=20,
                             ),
                         ),
+                        ft.Container(),
                         ft.ElevatedButton(
                             content=ft.Row(
                                 [
@@ -208,34 +221,12 @@ def choose_view(page: Page):
                         ft.ElevatedButton(
                             content=ft.Row(
                                 [
-                                    ft.Icon(ft.icons.LOGIN),
-                                    ft.Text("运行", weight=ft.FontWeight.W_600),
+                                    ft.Icon(ft.icons.INFO),
+                                    ft.Text("关于", weight=ft.FontWeight.W_600),
                                 ],
                                 alignment=ft.MainAxisAlignment.SPACE_AROUND,
                             ),
-                            on_click=start,
-                            width=120,
-                        ),
-                        ft.ElevatedButton(
-                            content=ft.Row(
-                                [
-                                    ft.Icon(ft.icons.GAMEPAD),
-                                    ft.Text("深渊", weight=ft.FontWeight.W_600),
-                                ],
-                                alignment=ft.MainAxisAlignment.SPACE_AROUND,
-                            ),
-                            on_click=start_abyss,
-                            width=120,
-                        ),
-                        ft.ElevatedButton(
-                            content=ft.Row(
-                                [
-                                    ft.Icon(ft.icons.HIDE_SOURCE),
-                                    ft.Text("显隐", weight=ft.FontWeight.W_800),
-                                ],
-                                alignment=ft.MainAxisAlignment.SPACE_AROUND,
-                            ),
-                            on_click=hide,
+                            on_click=go_about,
                             width=120,
                         ),
                         ft.ElevatedButton(
@@ -252,24 +243,71 @@ def choose_view(page: Page):
                         ft.ElevatedButton(
                             content=ft.Row(
                                 [
-                                    ft.Icon(ft.icons.SETTINGS),
-                                    ft.Text("设置", weight=ft.FontWeight.W_700),
+                                    ft.Icon(ft.icons.TRACK_CHANGES),
+                                    ft.Text("测试", weight=ft.FontWeight.W_600),
                                 ],
                                 alignment=ft.MainAxisAlignment.SPACE_AROUND,
                             ),
-                            on_click=go_config,
+                            on_click=go_test,
                             width=120,
                         ),
-                        ft.ElevatedButton(
-                            content=ft.Row(
-                                [
-                                    ft.Icon(ft.icons.INFO),
-                                    ft.Text("关于", weight=ft.FontWeight.W_600),
-                                ],
-                                alignment=ft.MainAxisAlignment.SPACE_AROUND,
-                            ),
-                            on_click=go_about,
-                            width=120,
+                        ft.Container(height=5),
+                        ft.Row([
+                            ft.Column([
+                                ft.Text("模拟宇宙", size=18, weight=ft.FontWeight.W_600, offset=ft.Offset(x=0.3, y=0), color=ft.colors.PINK_600),
+                                ft.Container(),
+                                ft.ElevatedButton(
+                                    content=ft.Row(
+                                        [
+                                            ft.Icon(ft.icons.LOGIN),
+                                            ft.Text("运行", weight=ft.FontWeight.W_600),
+                                        ],
+                                        alignment=ft.MainAxisAlignment.SPACE_AROUND,
+                                    ),
+                                    on_click=lambda e: start(e, 'simul'),
+                                    width=120,
+                                ),
+                                ft.ElevatedButton(
+                                    content=ft.Row(
+                                        [
+                                            ft.Icon(ft.icons.SETTINGS),
+                                            ft.Text("设置", weight=ft.FontWeight.W_700),
+                                        ],
+                                        alignment=ft.MainAxisAlignment.SPACE_AROUND,
+                                    ),
+                                    on_click=lambda e: go_config(e, 'simul'),
+                                    width=120,
+                                ),
+                            ]),
+                            ft.Container(width=100),
+                            ft.Column([
+                                ft.Text("差分宇宙", size=18, weight=ft.FontWeight.W_600, offset=ft.Offset(x=0.3, y=0), color=ft.colors.PINK_600),
+                                ft.Container(),
+                                ft.ElevatedButton(
+                                    content=ft.Row(
+                                        [
+                                            ft.Icon(ft.icons.LOGIN),
+                                            ft.Text("运行", weight=ft.FontWeight.W_600),
+                                        ],
+                                        alignment=ft.MainAxisAlignment.SPACE_AROUND,
+                                    ),
+                                    on_click=lambda e: start(e, 'diver'),
+                                    width=120,
+                                ),
+                                ft.ElevatedButton(
+                                    content=ft.Row(
+                                        [
+                                            ft.Icon(ft.icons.SETTINGS),
+                                            ft.Text("设置", weight=ft.FontWeight.W_700),
+                                        ],
+                                        alignment=ft.MainAxisAlignment.SPACE_AROUND,
+                                    ),
+                                    on_click=lambda e: go_config(e, 'diver'),
+                                    width=120,
+                                ),
+                            ]),
+                            ],
+                            alignment=MainAxisAlignment.CENTER,
                         ),
                     ],
                     alignment=MainAxisAlignment.CENTER,
@@ -277,15 +315,7 @@ def choose_view(page: Page):
                 ),
                 ft.Row(
                     [
-                        ft.Container(width=315),
-                        ft.Switch(
-                            label="沉浸奖励", on_change=bonus_changed, value=config.bonus, label_position='left', scale=1.2
-                        ),
-                    ]
-                ),
-                ft.Row(
-                    [
-                        ft.Container(),
+                        ft.Container(width=630),
                         ft.IconButton(
                             icon=ft.icons.THUMB_UP,
                             tooltip="赞赏",
@@ -293,7 +323,7 @@ def choose_view(page: Page):
                             on_click=go_money,
                         ),
                     ],
-                    alignment=MainAxisAlignment.SPACE_BETWEEN,
+                    alignment=MainAxisAlignment.CENTER,
                     vertical_alignment=CrossAxisAlignment.END,
                 ),
             ],

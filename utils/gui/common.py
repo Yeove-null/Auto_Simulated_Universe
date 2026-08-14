@@ -1,14 +1,15 @@
-from typing import Optional
+from typing import Optional, Union
 
 import flet as ft
 import win32gui
 
-from states import SimulatedUniverse
+from simul import SimulatedUniverse
+from diver import DivergentUniverse
 from abyss import Abyss
 
 
 class Page(ft.Page):
-    su: Optional[SimulatedUniverse]
+    su: Optional[Union[SimulatedUniverse, DivergentUniverse]]
     ab: Optional[Abyss]
     first: int
     bonus: bool
@@ -31,20 +32,15 @@ def show_snack_bar(page, text, color, selectable=False):
 
 
 def cleanup():
-    try:
-        win32gui.ShowWindow(mynd, 1)
-    except:
-        pass
+    pass
 
 
-def enum_windows_callback(hwnd, hwnds):
+def enum_windows_callback(hwnd, hwnds, name):
     class_name = win32gui.GetClassName(hwnd)
-    name = win32gui.GetWindowText(hwnd)
+    window_name = win32gui.GetWindowText(hwnd)
     try:
         if (
-            class_name == "ConsoleWindowClass"
-            and win32gui.IsWindowVisible(hwnd)
-            and "gui" in name[-7:]
+            name == window_name
         ):
             hwnds.append(hwnd)
     except:
@@ -52,11 +48,8 @@ def enum_windows_callback(hwnd, hwnds):
     return True
 
 
-def list_handles():
+def list_handles(name='AutoSimulatedUniverse'):
     hwnds = []
-    win32gui.EnumWindows(enum_windows_callback, hwnds)
+    win32gui.EnumWindows(lambda a,b:enum_windows_callback(a,b,name=name), hwnds)
     hwnds.append(0)
-    return hwnds
-
-
-mynd = list_handles()[0]
+    return hwnds[0]

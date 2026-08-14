@@ -2,7 +2,7 @@ import os
 import shutil
 import zipfile
 from base64 import b64decode
-from utils.config import config
+from utils.simul.config import config
 import requests
 
 root_path = os.getcwd()
